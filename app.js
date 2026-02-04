@@ -12,8 +12,8 @@ let currentBetAmount = 100;
 let walletConnected = false;
 let currentPage = 'gamePage';
 
-const WS_URL = `ws://${window.location.hostname}:8080/ws`;
-const API_URL = `http://${window.location.hostname}:8080/api`;
+const WS_URL = `wss://${window.location.hostname}:8080/ws`;
+const API_URL = `https://${window.location.hostname}:8080/api`;
 
 function connectWebSocket() {
     ws = new WebSocket(WS_URL);
