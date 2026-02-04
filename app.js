@@ -12,14 +12,30 @@ let currentBetAmount = 100;
 let walletConnected = false;
 let currentPage = 'gamePage';
 
-const WS_URL = `wss://${window.location.hostname}:8080/ws`;
-const API_URL = `https://${window.location.hostname}:8080/api`;
+// 🔧 ВАЖНО: Замените на ваш реальный домен сервера!
+// Варианты:
+// 1. VPS с доменом: const BACKEND_URL = 'your-domain.com';
+// 2. Ngrok (для тестирования): const BACKEND_URL = 'abc123.ngrok.io';
+// 3. Railway/Render: const BACKEND_URL = 'your-app.railway.app';
+
+const BACKEND_URL = 'https://quinsied-undeliberatively-kerry.ngrok-free.dev/'; // ⚠️ ИЗМЕНИТЕ ЭТО!
+
+// Автоматически определяем протокол (WSS для HTTPS, WS для HTTP)
+const WS_URL = `wss://${BACKEND_URL}/ws`;
+const API_URL = `https://${BACKEND_URL}/api`;
+
+// Альтернативный вариант (если фронтенд и бэкенд на одном домене):
+// const isSecure = window.location.protocol === 'https:';
+// const wsProtocol = isSecure ? 'wss:' : 'ws:';
+// const httpProtocol = isSecure ? 'https:' : 'http:';
+// const WS_URL = `${wsProtocol}//${window.location.hostname}/ws`;
+// const API_URL = `${httpProtocol}//${window.location.hostname}/api`;
 
 function connectWebSocket() {
     ws = new WebSocket(WS_URL);
     
     ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('✅ WebSocket connected');
         ws.send(JSON.stringify({
             type: 'get_user',
             user_id: userId
@@ -32,12 +48,13 @@ function connectWebSocket() {
     };
     
     ws.onclose = () => {
-        console.log('WebSocket disconnected');
+        console.log('❌ WebSocket disconnected');
         setTimeout(connectWebSocket, 3000);
     };
     
     ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('❌ WebSocket error:', error);
+        tg.showAlert('⚠️ Ошибка подключения к серверу. Проверьте настройки.');
     };
 }
 
@@ -99,108 +116,93 @@ function updateHistory(history) {
     const historyDots = document.getElementById('historyDots');
     historyDots.innerHTML = '';
     
-    let blueCount = 0;
-    let redCount = 0;
-    let greenCount = 0;
+    const counts = {blue: 0, red: 0, green: 0};
     
-    history.forEach(color => {
+    history.slice(-100).forEach(color => {
         const dot = document.createElement('div');
         dot.className = `history-dot ${color}`;
         historyDots.appendChild(dot);
-        
-        if (color === 'blue') blueCount++;
-        else if (color === 'red') redCount++;
-        else if (color === 'green') greenCount++;
+        counts[color]++;
     });
     
-    document.getElementById('blueCount').textContent = blueCount;
-    document.getElementById('redCount').textContent = redCount;
-    document.getElementById('greenCount').textContent = greenCount;
+    document.getElementById('blueCount').textContent = counts.blue;
+    document.getElementById('redCount').textContent = counts.red;
+    document.getElementById('greenCount').textContent = counts.green;
 }
 
 function updateParticipants(participants) {
-    document.getElementById('blueParticipants').textContent = participants.blue.length;
-    document.getElementById('greenParticipants').textContent = participants.green.length;
-    document.getElementById('redParticipants').textContent = participants.red.length;
+    document.getElementById('blueParticipants').textContent = participants.blue || 0;
+    document.getElementById('greenParticipants').textContent = participants.green || 0;
+    document.getElementById('redParticipants').textContent = participants.red || 0;
     
-    document.getElementById('blueUsers').textContent = participants.blue.length;
-    document.getElementById('greenUsers').textContent = participants.green.length;
-    document.getElementById('redUsers').textContent = participants.red.length;
+    document.getElementById('blueUsers').textContent = participants.blue || 0;
+    document.getElementById('greenUsers').textContent = participants.green || 0;
+    document.getElementById('redUsers').textContent = participants.red || 0;
     
-    const totalUsers = participants.blue.length + participants.green.length + participants.red.length;
-    document.getElementById('allUsers').textContent = totalUsers;
-}
-
-function showWinner(color) {
-    const diceContainer = document.getElementById('diceContainer');
-    const dices = diceContainer.querySelectorAll('.dice');
-    
-    dices.forEach(dice => {
-        dice.classList.remove('winner');
-        if (dice.classList.contains(color)) {
-            dice.classList.add('winner');
-        }
-    });
-    
-    const banner = document.getElementById('rollingBanner');
-    banner.textContent = `WINNER: ${color.toUpperCase()}!`;
-    banner.style.background = color === 'blue' ? '#4a9eff' : color === 'red' ? '#ff6b6b' : '#51cf66';
+    const total = (participants.blue || 0) + (participants.green || 0) + (participants.red || 0);
+    document.getElementById('allUsers').textContent = total;
 }
 
 function resetRound() {
-    const banner = document.getElementById('rollingBanner');
-    banner.innerHTML = 'ROLLING IN <span id="countdown">07.00</span>';
-    banner.style.background = '#51cf66';
-    
-    document.getElementById('blueParticipants').textContent = '0';
-    document.getElementById('greenParticipants').textContent = '0';
-    document.getElementById('redParticipants').textContent = '0';
+    document.querySelectorAll('.dice').forEach(dice => {
+        dice.className = 'dice';
+    });
+    updateParticipants({blue: 0, green: 0, red: 0});
 }
 
-function updateBalance() {
-    if (userData) {
-        document.getElementById('balance').textContent = userData.balance.toFixed(2);
-        document.getElementById('profileBalance').textContent = userData.balance.toFixed(2);
-    }
+function showWinner(color) {
+    document.querySelectorAll('.dice').forEach(dice => {
+        dice.classList.add(color);
+    });
+    
+    const banner = document.getElementById('rollingBanner');
+    banner.style.backgroundColor = getColorHex(color);
+    banner.textContent = `WINNER: ${color.toUpperCase()}!`;
+    
+    setTimeout(() => {
+        banner.style.backgroundColor = '';
+        banner.innerHTML = 'ROLLING IN <span id="countdown">07.00</span>';
+    }, 2000);
+}
+
+function getColorHex(color) {
+    const colors = {
+        blue: '#3b82f6',
+        red: '#ef4444',
+        green: '#10b981'
+    };
+    return colors[color] || '#000';
 }
 
 function updateUserInterface() {
     if (!userData) return;
     
-    updateBalance();
-    
-    const photoElements = [
-        document.getElementById('userPhoto'),
-        document.getElementById('profilePhoto')
-    ];
-    
-    photoElements.forEach(el => {
-        if (userData.photo_url) {
-            el.src = `https://api.telegram.org/file/bot${BOT_TOKEN}/${userData.photo_url}`;
-        } else {
-            el.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.first_name)}&background=4a9eff&color=fff&size=200`;
-        }
-    });
-    
+    document.getElementById('balance').textContent = userData.balance.toFixed(2);
+    document.getElementById('profileBalance').textContent = userData.balance.toFixed(2);
     document.getElementById('profileName').textContent = userData.first_name;
-    document.getElementById('profileUsername').textContent = '@' + (userData.username || 'user');
+    document.getElementById('profileUsername').textContent = '@' + userData.username;
     document.getElementById('profileId').textContent = userData.user_id;
-    
     document.getElementById('totalDeposited').textContent = userData.total_deposited.toFixed(2) + ' TON';
     document.getElementById('totalWithdrawn').textContent = userData.total_withdrawn.toFixed(2) + ' TON';
     document.getElementById('totalRisk').textContent = userData.total_risk.toFixed(2) + ' TON';
+    document.getElementById('joinedDate').textContent = new Date(userData.joined_at).toLocaleDateString();
     
-    const joinedDate = new Date(userData.joined_at);
-    document.getElementById('joinedDate').textContent = joinedDate.toLocaleDateString();
+    if (userData.photo_url) {
+        document.getElementById('userPhoto').src = userData.photo_url;
+        document.getElementById('profilePhoto').src = userData.photo_url;
+    }
     
-    const refLink = `https://t.me/YOUR_BOT_USERNAME?start=${userData.user_id}`;
+    const botUsername = 'YOUR_BOT_USERNAME'; // ⚠️ ИЗМЕНИТЕ на username вашего бота
+    const refLink = `https://t.me/${botUsername}?start=ref_${userData.user_id}`;
     document.getElementById('refLink').value = refLink;
-    
     document.getElementById('refCount').textContent = userData.referrals.length;
     document.getElementById('refEarned').textContent = userData.referral_earnings.toFixed(2) + ' TON';
-    
-    document.getElementById('languageSelect').value = userData.language;
-    document.getElementById('themeSelect').value = userData.theme;
+}
+
+function updateBalance() {
+    if (!userData) return;
+    document.getElementById('balance').textContent = userData.balance.toFixed(2);
+    document.getElementById('profileBalance').textContent = userData.balance.toFixed(2);
 }
 
 document.querySelectorAll('.amount-btn').forEach(btn => {
@@ -209,16 +211,16 @@ document.querySelectorAll('.amount-btn').forEach(btn => {
         
         switch(action) {
             case 'min':
-                currentBetAmount = 10;
+                currentBetAmount = 100;
                 break;
             case 'half':
-                currentBetAmount = Math.floor(currentBetAmount / 2);
+                currentBetAmount = Math.max(100, Math.floor(currentBetAmount / 2));
                 break;
             case 'double':
-                currentBetAmount = currentBetAmount * 2;
+                currentBetAmount = Math.min(userData?.balance || 1000, currentBetAmount * 2);
                 break;
             case 'max':
-                currentBetAmount = userData ? Math.floor(userData.balance) : 1000;
+                currentBetAmount = userData?.balance || 1000;
                 break;
         }
         
@@ -229,89 +231,93 @@ document.querySelectorAll('.amount-btn').forEach(btn => {
 document.querySelectorAll('.pick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const color = btn.dataset.color;
-        
-        if (!userData || userData.balance < currentBetAmount) {
-            tg.showAlert('❌ Недостаточно средств!');
-            return;
-        }
-        
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'place_bet',
-                user_id: userId,
-                color: color,
-                amount: currentBetAmount
-            }));
-        }
+        placeBet(color);
     });
 });
 
+function placeBet(color) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        tg.showAlert('❌ Нет соединения с сервером');
+        return;
+    }
+    
+    if (!userData || userData.balance < currentBetAmount) {
+        tg.showAlert('❌ Недостаточно средств');
+        return;
+    }
+    
+    ws.send(JSON.stringify({
+        type: 'place_bet',
+        user_id: userId,
+        color: color,
+        amount: currentBetAmount
+    }));
+}
+
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        const pageName = btn.dataset.page;
+        const page = btn.dataset.page;
+        showPage(page);
         
-        document.querySelectorAll('.page').forEach(page => {
-            page.classList.remove('active');
-        });
-        
-        document.querySelectorAll('.nav-btn').forEach(navBtn => {
-            navBtn.classList.remove('active');
-        });
-        
-        document.getElementById(pageName).classList.add('active');
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        currentPage = pageName;
-        
-        if (pageName === 'leaderboardPage') {
-            loadLeaderboard('24h', 'activity');
-        }
     });
 });
+
+function showPage(pageName) {
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+    });
+    document.getElementById(pageName).classList.add('active');
+    currentPage = pageName;
+    
+    if (pageName === 'leaderboardPage') {
+        loadLeaderboard('24h');
+    }
+}
 
 document.querySelectorAll('.period-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const period = btn.dataset.period;
+        loadLeaderboard(period);
         
-        document.querySelectorAll('.period-btn').forEach(b => {
-            b.classList.remove('active');
-        });
+        document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        
-        loadLeaderboard(period, 'activity');
     });
 });
 
-function loadLeaderboard(period, mode) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-            type: 'get_leaderboard',
-            period: period,
-            mode: mode
-        }));
-    }
+function loadLeaderboard(period) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    
+    ws.send(JSON.stringify({
+        type: 'get_leaderboard',
+        period: period
+    }));
 }
 
 function displayLeaderboard(data) {
     const list = document.getElementById('leaderboardList');
     list.innerHTML = '';
     
-    data.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'leaderboard-item';
+    data.forEach((user, index) => {
+        const item = document.createElement('div');
+        item.className = 'leaderboard-item';
         
-        const rankEmoji = item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.rank;
+        const medal = index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${index + 1}`;
         
-        div.innerHTML = `
-            <div class="rank-number">${rankEmoji}</div>
-            <img class="user-avatar" src="https://ui-avatars.com/api/?name=${encodeURIComponent(item.first_name)}&background=4a9eff&color=fff&size=100" alt="${item.first_name}">
+        item.innerHTML = `
+            <div class="rank-number">${medal}</div>
             <div class="user-info">
-                <div class="user-name">${item.first_name}</div>
-                <div class="user-username">@${item.username || 'user'}</div>
+                <img src="${user.photo_url || 'default-avatar.png'}" alt="${user.first_name}">
+                <div>
+                    <div class="user-name">${user.first_name}</div>
+                    <div class="user-username">@${user.username}</div>
+                </div>
             </div>
-            <div class="user-value">${item.value.toFixed(2)}</div>
+            <div class="user-score">${user.score} TON</div>
         `;
         
-        list.appendChild(div);
+        list.appendChild(item);
     });
 }
 
@@ -335,15 +341,11 @@ document.querySelectorAll('.deposit-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         const method = tab.dataset.method;
         
-        document.querySelectorAll('.deposit-tab').forEach(t => {
-            t.classList.remove('active');
-        });
+        document.querySelectorAll('.deposit-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         
-        document.querySelectorAll('.deposit-method').forEach(m => {
-            m.classList.remove('active');
-        });
-        document.getElementById(`${method}Deposit`).classList.add('active');
+        document.querySelectorAll('.deposit-method').forEach(m => m.classList.remove('active'));
+        document.getElementById(method + 'Deposit').classList.add('active');
     });
 });
 
@@ -351,14 +353,14 @@ document.getElementById('depositStarsBtn').addEventListener('click', async () =>
     const amount = parseInt(document.getElementById('starsAmount').value);
     
     if (!amount || amount < 120) {
-        tg.showAlert('❌ Минимальная сумма 120 Stars');
+        tg.showAlert('❌ Минимальная сумма: 120 Stars');
         return;
     }
     
     try {
         const response = await fetch(`${API_URL}/deposit`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 user_id: userId,
                 amount: amount,
@@ -366,99 +368,58 @@ document.getElementById('depositStarsBtn').addEventListener('click', async () =>
             })
         });
         
-        const result = await response.json();
+        const data = await response.json();
         
-        if (result.success) {
-            tg.showAlert('✅ Пополнение успешно!');
+        if (data.success) {
+            tg.showAlert('✅ Платеж создан! Пожалуйста, оплатите в боте.');
             document.getElementById('depositModal').classList.remove('active');
-            ws.send(JSON.stringify({ type: 'get_user', user_id: userId }));
         } else {
-            tg.showAlert('❌ ' + result.error);
+            tg.showAlert('❌ ' + (data.error || 'Ошибка создания платежа'));
         }
     } catch (error) {
-        tg.showAlert('❌ Ошибка при пополнении');
-    }
-});
-
-document.getElementById('connectWalletBtn').addEventListener('click', () => {
-    walletConnected = true;
-    document.getElementById('walletStatus').textContent = 'Кошелёк подключен ✅';
-    document.getElementById('connectWalletBtn').style.display = 'none';
-    document.getElementById('tonAmount').style.display = 'block';
-    document.getElementById('depositTonBtn').style.display = 'block';
-});
-
-document.getElementById('depositTonBtn').addEventListener('click', async () => {
-    const amount = parseFloat(document.getElementById('tonAmount').value);
-    
-    if (!amount || amount < 1) {
-        tg.showAlert('❌ Минимальная сумма 1 TON');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL}/deposit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: userId,
-                amount: amount,
-                method: 'ton'
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            tg.showAlert('✅ Пополнение успешно!');
-            document.getElementById('depositModal').classList.remove('active');
-            ws.send(JSON.stringify({ type: 'get_user', user_id: userId }));
-        } else {
-            tg.showAlert('❌ ' + result.error);
-        }
-    } catch (error) {
-        tg.showAlert('❌ Ошибка при пополнении');
+        console.error('Deposit error:', error);
+        tg.showAlert('❌ Ошибка соединения с сервером');
     }
 });
 
 document.getElementById('withdrawSubmitBtn').addEventListener('click', async () => {
-    const address = document.getElementById('tonAddress').value.trim();
+    const address = document.getElementById('tonAddress').value;
     const amount = parseFloat(document.getElementById('withdrawAmount').value);
     
-    if (!address) {
-        tg.showAlert('❌ Введите адрес кошелька');
+    if (!address || !amount) {
+        tg.showAlert('❌ Заполните все поля');
         return;
     }
     
-    if (!amount || amount < 5) {
-        tg.showAlert('❌ Минимальная сумма вывода 5 TON');
+    if (amount < 5) {
+        tg.showAlert('❌ Минимальная сумма вывода: 5 TON');
         return;
     }
     
     try {
         const response = await fetch(`${API_URL}/withdrawal`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 user_id: userId,
-                amount: amount,
-                address: address
+                address: address,
+                amount: amount
             })
         });
         
-        const result = await response.json();
+        const data = await response.json();
         
-        if (result.success) {
-            tg.showAlert('✅ Заявка на вывод отправлена!');
+        if (data.success) {
+            tg.showAlert('✅ Заявка создана! Ожидайте одобрения.');
             document.getElementById('withdrawModal').classList.remove('active');
             document.getElementById('tonAddress').value = '';
             document.getElementById('withdrawAmount').value = '';
-            ws.send(JSON.stringify({ type: 'get_user', user_id: userId }));
         } else {
-            tg.showAlert('❌ ' + result.error);
+            tg.showAlert('❌ ' + (data.error || 'Ошибка создания заявки'));
         }
     } catch (error) {
-        tg.showAlert('❌ Ошибка при создании заявки');
+        console.error('Withdrawal error:', error);
+        tg.showAlert('❌ Ошибка соединения с сервером');
     }
 });
 
@@ -469,29 +430,18 @@ document.getElementById('copyRefBtn').addEventListener('click', () => {
     tg.showAlert('✅ Ссылка скопирована!');
 });
 
-document.getElementById('languageSelect').addEventListener('change', (e) => {
-    if (userData) {
-        userData.language = e.target.value;
-    }
+document.getElementById('profileBtn').addEventListener('click', () => {
+    showPage('profilePage');
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-page="profilePage"]').classList.add('active');
 });
 
-document.getElementById('themeSelect').addEventListener('change', (e) => {
-    if (userData) {
-        userData.theme = e.target.value;
-        if (e.target.value === 'light') {
-            document.documentElement.style.setProperty('--bg-primary', '#f5f5f5');
-            document.documentElement.style.setProperty('--bg-secondary', '#ffffff');
-            document.documentElement.style.setProperty('--bg-card', '#ffffff');
-            document.documentElement.style.setProperty('--text-primary', '#000000');
-            document.documentElement.style.setProperty('--text-secondary', '#666666');
-        } else {
-            document.documentElement.style.setProperty('--bg-primary', '#1a1d29');
-            document.documentElement.style.setProperty('--bg-secondary', '#252836');
-            document.documentElement.style.setProperty('--bg-card', '#2a2d3a');
-            document.documentElement.style.setProperty('--text-primary', '#ffffff');
-            document.documentElement.style.setProperty('--text-secondary', '#8a8fa3');
-        }
-    }
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🎰 Casino Bot initialized');
+    console.log('User ID:', userId);
+    console.log('WebSocket URL:', WS_URL);
+    console.log('API URL:', API_URL);
+    
+    connectWebSocket();
 });
-
-connectWebSocket();
